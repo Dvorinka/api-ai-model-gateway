@@ -4,15 +4,15 @@ services:
   ai-model-gateway-api:
     build: .
     ports:
-      - "8080:8080"
+      - "30012:30012"
     environment:
-      - PORT=8080
+      - PORT=30012
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - AI_MODEL_GATEWAY_API_KEY=${AI_MODEL_GATEWAY_API_KEY:-dev-ai-model-gateway-key}
       - RAPIDAPI_PROXY_SECRET=${RAPIDAPI_PROXY_SECRET:-}
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/healthz"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:30012/healthz"]
       interval: 30s
       timeout: 10s
       retries: 3
