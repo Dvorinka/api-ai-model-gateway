@@ -1,0 +1,286 @@
+openapi: 3.0.3
+info:
+  title: AI Model Gateway API
+  description: Gateway API for accessing multiple AI model providers with failover support
+  version: 1.0.0
+  contact:
+    name: API Services
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:8093
+    description: Development server
+  - url: https://api.example.com
+    description: Production server
+
+paths:
+  /healthz:
+    get:
+      summary: Health check endpoint
+      description: Returns the health status of the service
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /v1/ai/chat/completions:
+    post:
+      summary: Create chat completion
+      description: Create a chat completion using multiple AI providers with automatic failover
+      tags:
+        - AI Chat
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatCompletionRequest'
+      responses:
+        '200':
+          description: Successful completion response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ChatCompletionResult'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '405':
+          description: Method not allowed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: All providers failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderFailureError'
+
+components:
+  schemas:
+    ChatCompletionRequest:
+      type: object
+      required:
+        - messages
+        - providers
+      properties:
+        messages:
+          type: array
+          description: Array of messages in the conversation
+          minItems: 1
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/Message'
+        providers:
+          type: array
+          description: Array of AI providers to try in order
+          minItems: 1
+          maxItems: 5
+          items:
+            $ref: '#/components/schemas/Provider'
+        max_tokens:
+          type: integer
+          description: Maximum number of tokens to generate
+          minimum: 1
+          example: 1000
+        temperature:
+          type: number
+          format: float
+          description: Sampling temperature (0.0 to 2.0)
+          minimum: 0
+          maximum: 2
+          example: 0.7
+
+    Message:
+      type: object
+      required:
+        - role
+        - content
+      properties:
+        role:
+          type: string
+          description: Message role
+          enum: [system, user, assistant, tool]
+          example: "user"
+        content:
+          type: string
+          description: Message content
+          example: "Hello, how are you?"
+
+    Provider:
+      type: object
+      required:
+        - base_url
+        - model
+      properties:
+        name:
+          type: string
+          description: Provider name for identification
+          example: "openai"
+        base_url:
+          type: string
+          format: uri
+          description: Base URL of the provider API
+          example: "https://api.openai.com"
+        api_key:
+          type: string
+          description: API key for the provider
+          example: "sk-..."
+        model:
+          type: string
+          description: Model name to use
+          example: "gpt-3.5-turbo"
+        timeout_ms:
+          type: integer
+          description: Request timeout in milliseconds
+          minimum: 1000
+          maximum: 30000
+          default: 10000
+          example: 15000
+        chat_completions_path:
+          type: string
+          description: Path for chat completions endpoint
+          default: "/v1/chat/completions"
+          example: "/v1/chat/completions"
+        headers:
+          type: object
+          description: Additional headers to send with requests
+          additionalProperties:
+            type: string
+          example:
+            X-Custom-Header: "custom-value"
+
+    Usage:
+      type: object
+      properties:
+        prompt_tokens:
+          type: integer
+          description: Number of tokens in the prompt
+          example: 50
+        completion_tokens:
+          type: integer
+          description: Number of tokens in the completion
+          example: 100
+        total_tokens:
+          type: integer
+          description: Total number of tokens
+          example: 150
+
+    Attempt:
+      type: object
+      properties:
+        provider:
+          type: string
+          description: Provider name
+          example: "openai"
+        ok:
+          type: boolean
+          description: Whether the attempt was successful
+          example: true
+        status_code:
+          type: integer
+          description: HTTP status code
+          example: 200
+        error:
+          type: string
+          description: Error message if failed
+          example: "timeout"
+        latency_ms:
+          type: integer
+          format: int64
+          description: Request latency in milliseconds
+          example: 1250
+
+    ChatCompletionResult:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Completion ID
+          example: "chatcmpl-123"
+        provider:
+          type: string
+          description: Provider that responded
+          example: "openai"
+        model:
+          type: string
+          description: Model used
+          example: "gpt-3.5-turbo"
+        message:
+          $ref: '#/components/schemas/Message'
+        finish_reason:
+          type: string
+          description: Reason for completion finish
+          example: "stop"
+        usage:
+          $ref: '#/components/schemas/Usage'
+        attempts:
+          type: array
+          description: All attempts made
+          items:
+            $ref: '#/components/schemas/Attempt'
+        total_latency_ms:
+          type: integer
+          format: int64
+          description: Total latency including all attempts
+          example: 1500
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+          example: "invalid json body"
+
+    ProviderFailureError:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+          example: "all providers failed"
+        attempts:
+          type: array
+          description: All failed attempts
+          items:
+            $ref: '#/components/schemas/Attempt'
+
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: API key for authentication (format: "Bearer YOUR_API_KEY")
+
+tags:
+  - name: Health
+    description: Health check endpoints
+  - name: AI Chat
+    description: AI chat completion functionality
