@@ -17,7 +17,7 @@ import (
 func main() {
 	logger := log.New(os.Stdout, "[ai] ", log.LstdFlags)
 
-	port := envString("PORT", "8093")
+	port := envString("PORT", "30002")
 	apiKey := envString("AI_API_KEY", "dev-ai-key")
 	if apiKey == "dev-ai-key" {
 		logger.Println("AI_API_KEY not set, using default development key")
